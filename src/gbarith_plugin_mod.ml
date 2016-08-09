@@ -1,0 +1,8 @@
+let _ = Mltop.add_known_module "utile"
+let _ = Mltop.add_known_module "entiers"
+let _ = Mltop.add_known_module "polynomes2"
+let _ = Mltop.add_known_module "dansideal"
+let _ = Mltop.add_known_module "gbarith_compute"
+let _ = Mltop.add_known_module "gbarith_tactic"
+let _ = Mltop.add_known_module "gbarith_plugin_mod"
+let _ = Mltop.add_known_module "gbarith_plugin"
