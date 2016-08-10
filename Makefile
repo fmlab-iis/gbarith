@@ -8,7 +8,11 @@ MODULES := \
 	src/gbarith_tactic.ml4 \
 	src/gbarith_plugin_mod.ml \
 	src/gbarith_plugin.mllib \
-	src/GBArithDef.v
+	src/GBCompute.v \
+	src/GBR.v \
+	src/GBZ.v \
+	src/GBZArith.v \
+#	test-suite/GBExamples.v
 NAME := GBArith
 ROOT := ./
 .PHONY: coq clean

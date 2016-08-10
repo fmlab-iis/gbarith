@@ -5,6 +5,9 @@ open Utile
 open Entiers
 open Polynomes2
 
+exception ToolNotFound of string
+exception NotSupportedByMacOS
+
 let fgbascii_path = Filename.concat Filename.current_dir_name "fgbascii"
 let serveur__DMP__Lexp__GINT_path = Filename.concat Filename.current_dir_name "serveur__DMP__Lexp__GINT"
 
@@ -126,7 +129,7 @@ let ostring_of_cpos (n : Constr.t) : string =
 (* ------------------------------------------------------------------------- *)
 
 module CoqTerm = struct
-  let path = ["GBArith"; "GBArithDef"]
+  let path = ["GBArith"; "GBCompute"]
   let _Zero : Term.constr lazy_t = lazy (init_constant path "Zero")
   let _Const : Term.constr lazy_t = lazy (init_constant path "Const")
   let _Var : Term.constr lazy_t = lazy (init_constant path "Var")
@@ -137,6 +140,9 @@ module CoqTerm = struct
   let _Pow : Term.constr lazy_t = lazy (init_constant path "Pow")
   let _lnil : Term.constr lazy_t = lazy (init_constant path "lnil")
   let _lceq : Term.constr lazy_t = lazy (init_constant path "lceq")
+  let _LT : Term.constr lazy_t = lazy (init_constant path "LT")
+  let _JCF1 : Term.constr lazy_t = lazy (init_constant path "JCF1")
+  let _JCF2 : Term.constr lazy_t = lazy (init_constant path "JCF2")
 end
 
 type vname = string
@@ -152,6 +158,17 @@ type term =
   | Pow of (term * int)
 
 type lineq = term list
+
+let rec string_of_term (t : term) : string =
+  match t with
+  | Zero -> "O"
+  | Const n -> Num.string_of_num n
+  | Var v -> v
+  | Opp t -> "-(" ^ string_of_term t ^ ")"
+  | Add (t1, t2) -> "(" ^ string_of_term t1 ^ " + " ^ string_of_term t2 ^ ")"
+  | Sub (t1, t2) -> "(" ^ string_of_term t1 ^ " - " ^ string_of_term t2 ^ ")"
+  | Mul (t1, t2) -> "(" ^ string_of_term t1 ^ " * " ^ string_of_term t2 ^ ")"
+  | Pow (t1, t2) -> "(" ^ string_of_term t1 ^ " ^ " ^ string_of_int t2 ^ ")"
 
 let numdom r =
   let r' = Ratio.normalize_ratio (ratio_of_num r) in
@@ -170,7 +187,10 @@ let rec cterm_of_oterm (t : term) : Constr.t =
   | Add (t1, t2) -> Constr.mkApp (Lazy.force CoqTerm._Add, [| cterm_of_oterm t1; cterm_of_oterm t2 |])
   | Sub (t1, t2) -> Constr.mkApp (Lazy.force CoqTerm._Sub, [| cterm_of_oterm t1; cterm_of_oterm t2 |])
   | Mul (t1, t2) -> Constr.mkApp (Lazy.force CoqTerm._Mul, [| cterm_of_oterm t1; cterm_of_oterm t2 |])
-  | Pow (t', n) -> Constr.mkApp (Lazy.force CoqTerm._Pow, [| cterm_of_oterm t'; cpos_of_onum (Int n) |])
+  | Pow (t', n) ->
+     if n = 0 then cterm_of_oterm (Const (Int 1))
+     else if n > 0 then Constr.mkApp (Lazy.force CoqTerm._Pow, [| cterm_of_oterm t'; cpos_of_onum (Int n) |])
+     else failwith ("The exponent cannot be negative in the term: " ^ string_of_term t)
 
 (** Constructs an OCaml term from a Coq term. *)
 let rec oterm_of_cterm (t : Constr.t) : term =
@@ -708,14 +728,53 @@ let string_of_version v =
   | JCF1 -> "jcf1"
   | JCF2 -> "jcf2"
 
+let coq_lt = 1
+let coq_jcf1 = 2
+let coq_jcf2 = 3
+
+let convert_coq_version (v : Globnames.global_reference) : version =
+  match v with
+  | Globnames.ConstructRef ((ind, _), idx) when Names.MutInd.to_string ind = "GBArith.GBCompute.gb_algorithm" ->
+     if idx = coq_lt then LT
+     else if idx = coq_jcf1 then JCF1
+     else if idx = coq_jcf2 then JCF2
+     else failwith "Unknown algorithm."
+  | Globnames.ConstRef cr ->
+     begin
+     match Global.body_of_constant cr with
+     | None -> failwith "Unknown algorithm."
+     | Some c ->
+        if Constr.equal c (Lazy.force CoqTerm._LT) then LT
+        else if Constr.equal c (Lazy.force CoqTerm._JCF1) then JCF1
+        else if Constr.equal c (Lazy.force CoqTerm._JCF2) then JCF2
+        else failwith "Unknown algorithm."
+     end
+  | _ -> failwith "Unknown algorithm."
+
+let is_mac () =
+  try
+    let ic = Unix.open_process_in "uname" in
+    let uname = input_line ic in
+    let () = close_in ic in
+    uname = "Darwin"
+  with _ ->
+    false
+
 let gb_compute ?version:ver lp =
   let _ = init_trace () in
   let ver =
     match ver with
     | None -> default_version
     | Some v -> v in
-  let ver_str = string_of_version ver in
-  let _ = trace ("Version: " ^ ver_str) in
-  let _ = version := ver_str in
-  let lc = comb_lin1 lp in
-  lc
+  if ver = JCF1 && not (Sys.file_exists serveur__DMP__Lexp__GINT_path) then
+    raise (ToolNotFound serveur__DMP__Lexp__GINT_path)
+  else if ver = JCF2 && not (Sys.file_exists fgbascii_path) then
+    raise (ToolNotFound fgbascii_path)
+  else if is_mac () && (ver = JCF1 || ver = JCF2) then
+    raise NotSupportedByMacOS
+  else
+    let ver_str = string_of_version ver in
+    let _ = trace ("Version: " ^ ver_str) in
+    let _ = version := ver_str in
+    let lc = comb_lin1 lp in
+    lc
