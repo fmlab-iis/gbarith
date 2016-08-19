@@ -185,11 +185,21 @@ Qed.
 
 From GBArith Require Import GBZArith.
 
+(* p = x^7 + y^7,
+   lp = [x + y],
+   d = 1,
+   c = 1,
+   c1 = y^6 - y^5x + y^4x^2 - y^3x^3 + y^2x^4 - yx^5 + x^6 *)
 Goal forall x y : Z, divides (x + y) (x^7 + y^7).
 Proof.
   gbarith.
 Qed.
 
+(* p = c,
+   lp = [a; 1 - (x * a + x0 * b); b * c - x1 * a],
+   d = 1,
+   c = 1,
+   c1 = x1 * x0 + c * x *)
 Goal forall a b c : Z, divides a (b * c) -> coprime a b -> divides a c.
 Proof.
   gbarith.
@@ -200,11 +210,21 @@ Proof.
   gbarith.
 Qed.
 
+(* p = x - y,
+   lp = [n; x + a - (y + a) - x0 * n]
+   d = 1,
+   c = 1,
+   c1 = x0 *)
 Goal forall x y a n : Z, modulo (x + a) (y + a) n <-> modulo x y n.
 Proof.
   gbarith.
 Qed.
 
+(* p = x,
+   lp = [n; x - 0 - x0 * n],
+   d = 1,
+   c = 1,
+   c1 = x0 *)
 Goal forall x n : Z, modulo x 0 n <-> divides n x.
 Proof.
   gbarith.
@@ -215,31 +235,61 @@ Proof.
   gbarith.
 Qed.
 
+(* p = x,
+   lp = [y; x - (x0 * a + x1 * b); b - x2 * x; a - x3 * x; b - x4 * y; a - x5 * y],
+   d = 1,
+   c = 1,
+   c1 = x4 * x1 + x5 * x0 *)
 Goal forall a b c x y : Z, gcd x a b -> divides y a -> divides y b -> divides y x.
 Proof.
   gbarith.
 Qed.
 
+(* p = x - y,
+   lp = [n; 1 - (x0 * a + x1 * n); a * x - a * y - x2 * n],
+   d = 1,
+   c = 1,
+   c1 = (-y + x) * x1 + x2 * x0 *)
 Goal forall a x y n : Z, modulo (a * x) (a * y) n -> coprime a n -> modulo x y n.
 Proof.
   gbarith.
 Qed.
 
+(* p = a - b,
+   lp = [d; b - x * d; a - x0 * d],
+   d = 1,
+   c = 1,
+   c1 = x0 - x *)
 Goal forall d a b : Z, divides d a -> divides d b -> divides d (a - b).
 Proof.
   gbarith.
 Qed.
 
+(* p = c * b,
+   lp = [c * a; b - x * a],
+   d = 1,
+   c = 1,
+   c1 = x *)
 Goal forall a b c : Z, divides a b -> divides (c * a) (c * b).
 Proof.
   gbarith.
 Qed.
 
+(* p = a,
+   lp = [d; a - x0 * (x * d)],
+   d = 1,
+   c = 1,
+   c1 = x * x0 *)
 Goal forall x d a : Z, divides (x * d) a -> divides d a.
 Proof.
   gbarith.
 Qed.
 
+(* p = b * d,
+   lp = [a * c; d - x * c; b - x0 * a],
+   d = 1,
+   c = 1,
+   c1 = x0 * x *)
 Goal forall a b c d : Z, divides a b -> divides c d -> divides (a * c) (b * d).
 Proof.
   gbarith.
@@ -255,31 +305,61 @@ Proof.
   gbarith.
 Qed.
 
+(* p = r,
+   lp = [m * n; 1 - (x * m + x0 * n); r - x1 * n; r - x2 * m],
+   d = 1,
+   c = 1,
+   c1 = x2 * x0 + x1 * x *)
 Goal forall m n r : Z, divides m r -> divides n r -> coprime m n -> divides (m * n) r.
 Proof.
   gbarith.
 Qed.
 
+(* p = x * y - x' * y',
+   lp = [n; y - y' - x0 * n; x - x' - x1 * n],
+   d = 1,
+   c = 1,
+   c1 = x * x0 + x1 * y' *)
 Goal forall x x' y y' n : Z, modulo x x' n -> modulo y y' n -> modulo (x * y) (x' * y') n.
 Proof.
   gbarith.
 Qed.
 
+(* p = x - y,
+   lp = [n; m - x0 * n; x - y - x1 * m],
+   d = 1,
+   c = 1,
+   c1 = x1 * x0 *)
 Goal forall x y m n : Z, modulo x y m -> divides n m -> modulo x y n.
 Proof.
   gbarith.
 Qed.
 
+(* p = x - y,
+   lp = [a * b; x - y - x0 * b; x - y - x1 * a; 1 - (x2 * a + x3 * b)],
+   d = 1,
+   c = 1,
+   c1 = x3 * x1 + x2 * x0 *)
 Goal forall a b x y : Z, coprime a b -> modulo x y a -> modulo x y b -> modulo x y (a * b).
 Proof.
   gbarith.
 Qed.
 
+(* p = x^2 - y^2,
+   lp = [x + y],
+   d = 1,
+   c = 1,
+   c1 = -y + x *)
 Goal forall x y : Z, modulo (x^2) (y^2) (x + y).
 Proof.
   gbarith.
 Qed.
 
+(* p = (x + y) * (x - y),
+   lp = [n; y^2 - a - x0 * n; x^2 - a - x1 * n],
+   d = 1,
+   c = 1,
+   c1 = x1 - x0 *)
 Goal forall x y a n : Z, modulo (x^2) a n -> modulo (y^2) a n -> divides n ((x + y) * (x - y)).
 Proof.
   gbarith.
