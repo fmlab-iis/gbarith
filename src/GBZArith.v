@@ -14,8 +14,6 @@ From Coq Require Import Wf_Z.
 From Coq Require Import Znumtheory.
 From Coq Require Import List.
 From GBArith Require Export GBCompute.
-
-
 Open Scope Z_scope.
 
 (********************************************)
@@ -364,11 +362,25 @@ Proof.
   exists x0; exists x1; rewrite H; ring.
 Qed.
 
-Ltac gb_exists program :=
+(* for debugging, to be deleted *)
+Ltac print_goal :=
+  match goal with
+    | |- ?x => idtac x
+  end.
+Ltac print_left :=
+  match goal with
+    | |- ?x = ?y => idtac x
+  end.
+Ltac print_exp e :=
+  cut (e = e);
+  [ let H := fresh "H" in intro H; clear H |
+    simplZ; print_left; reflexivity ].
+
+Ltac gb_exists_original program :=
   intros;
   repeat remove_exists_hyp;
   match goal with
-  | |- exists x : Z, ?a = x * ?b => apply gb_ex_ex1; gb_exists program
+  | |- exists x : Z, ?a = x * ?b => apply gb_ex_ex1; gb_exists_original program
   | |- exists x : Z, ?a = ?b * x =>
     repeat equalities_to_goal2;
     match goal with
@@ -383,6 +395,12 @@ Ltac gb_exists program :=
       let p := constr:(List.hd 0 lp1) in
       let lp := constr:(List.rev (List.tail lp1)) in
       gbarith_compute program a ltac:(fun t =>
+        idtac "variables := "; idtac l;
+        idtac "a := "; idtac a;
+        idtac "lp1 := "; print_exp lp1;
+        idtac "p := "; print_exp p;
+        idtac "lp := "; print_exp lp;
+        idtac "t := "; print_exp (interpret_list t l);
         match t with
         | lceq (Pow ?p0 ?d)  (lceq ?c ?lc) =>
           let c := constr:(interpret c l) in
@@ -428,7 +446,7 @@ Ltac gb_exists program :=
       )
     end
   | |- exists x : Z, exists y : Z, ?a = ?b * x + ?d * y =>
-    apply gb_ex_ex2; gb_exists program
+    apply gb_ex_ex2; gb_exists_original program
   | |- exists x : Z, exists y : Z, ?a = x * ?b + y * ?d =>
     repeat equalities_to_goal2;
     match goal with
@@ -488,6 +506,205 @@ Ltac gb_exists program :=
     end
  end.
 
+Ltac gb_get_goal :=
+  match goal with
+  | |- ?g => g
+  end.
+
+Ltac gb_rewrite f t :=
+  let Hgb := fresh "Hgb" in
+  cut (f = t); simplZ; [idtac | ring];
+  match goal with
+  | |- ?a = ?b -> _ =>
+    intro Hgb; try pattern a at 1; try rewrite Hgb; clear Hgb
+  end.
+
+Ltac cancel_mult_div :=
+  match goal with
+    | |- context h [?b * (?a / ?b)] =>
+      rewrite <- (Z_div_exact_full_2 a b);
+      [ idtac
+      | intro; discriminate
+      | idtac]
+    | |- context h [?b * (?c * (?a / ?b))] =>
+      rewrite (Zmult_assoc b c (a / b));
+      rewrite (Zmult_comm b c);
+      rewrite <- (Zmult_assoc c b (a / b));
+      cancel_mult_div
+  end.
+
+Ltac gb_exists1 program :=
+  intros;
+  repeat remove_exists_hyp;
+  match goal with
+  | |- exists x : Z, ?a = x * ?b =>
+    apply gb_ex_ex1; gb_exists1 program
+  | |- exists x : Z, ?a = ?b * x =>
+    repeat equalities_to_goal2;
+    let g := gb_get_goal in
+    let lh := lhyps g in
+    let t1:= constr:(a = 0) in
+    let t := ajoute_hyps lh t1 in
+    let t := constr:(b = 0 -> t) in
+    let l := variables t in
+    let abs := abstrait t l in
+    let lp1 := constr:(List.rev (interpret_list abs l))  in
+    let p := constr:(List.hd 0 lp1) in
+    let lp := constr:(List.rev (List.tail lp1)) in
+    idtac "t := "; print_exp t;
+    gbarith_compute program abs ltac:(fun t =>
+      idtac "variables := "; idtac l;
+      idtac "abs := "; idtac abs;
+      idtac "lp1 := "; print_exp lp1;
+      idtac "p := "; print_exp p;
+      idtac "lp := "; print_exp lp;
+      idtac "t := "; idtac t;
+      idtac "t := "; print_exp (interpret_list t l);
+      match t with
+      | lceq (Pow ?p0 1%positive) (lceq ?c ?lc) =>
+        let c := constr:(interpret c l) in
+        let c := eval compute in c in
+        match lc with
+        | lceq ?c1 _ =>
+          let lc := constr:(interpret_list lc l) in
+          let c1 := constr:(interpret c1 l) in
+          let p0 := constr:(interpret p0 l) in
+          let e := constr:(combine lc lp) in
+          idtac "p0 := "; print_exp p0;
+          idtac "c := "c;
+          idtac "d := 1";
+          idtac "lc := "; print_exp lc;
+          idtac "c1 := "; print_exp c1;
+          idtac "e := "; print_exp e;
+          (* In this case,
+           * - a = p = p0,
+           * - c * p0 ^ (Zpos d) = e, and when d = 1
+           * - p0 = b * (c1 / c)
+           *)
+          intros;
+          match c with
+          | 1%Z => exists c1
+          | _ => (* exists (c1 / c) *) fail 100 "The constant c = "c" is not 1."
+          end; (* check the constant c *)
+          simplZ;
+          gb_rewrite p p0; gb_rewrite p0 e;
+          repeat equalities_to_goal2;
+          repeat rewrite_with_goal_in_goal;
+          ring
+        end
+      | lceq (Pow ?p0 1%positive) (lceq ?c ?lc) =>
+        fail 100 "Tactic fails when d = 1."
+      | lceq (Pow ?p0 ?d) (lceq ?c ?lc) =>
+        fail 100 "d = "d" but only 1 is supported."
+      | lceq (Const ?p0 ?d)  (lceq ?c ?lc) => (* d = 0, ?b = 1 *)
+        let c := constr:(interpret c l) in
+        let c := eval compute in c in
+        match lc with
+        | lceq ?c1  _ =>
+          let lc := constr:(interpret_list lc l) in
+          let c1 := constr:(interpret c1 l) in
+          let e := constr:(combine lc lp) in
+          idtac "p0 := "p0;
+          idtac "c := "c;
+          idtac "d := 0";
+          idtac "lc := "; print_exp lc;
+          idtac "c1 := "; print_exp c1;
+          idtac "e := "; print_exp e;
+          exists a; rewrite Z.mul_1_l; reflexivity
+        end
+      end (* end of match t *)
+    )
+  end.
+
+Ltac gb_exists2 program :=
+  intros;
+  repeat remove_exists_hyp;
+  match goal with
+  | |- exists x : Z, exists y : Z, ?a = ?b * x + ?d * y =>
+    apply gb_ex_ex2; gb_exists2 program
+  | |- exists x : Z, exists y : Z, ?a = x * ?b + y * ?d =>
+    repeat equalities_to_goal2;
+    let g := gb_get_goal in
+    let lh := lhyps g in
+    let t1 := constr:(a = 0) in
+    let t := ajoute_hyps lh t1 in
+    let t := constr:(b = 0 -> d = 0 -> t) in
+    let l := variables t in
+    let abs := abstrait t l in
+    let lp1 := constr:(List.rev (interpret_list abs l))  in
+    let p := constr:(List.hd 0 lp1) in
+    let lp := constr:(List.rev (List.tail lp1)) in
+    idtac "t := "; print_exp t;
+    gbarith_compute program abs ltac:(fun t =>
+      match t with
+      | lceq (Pow ?p0 1%positive)  (lceq ?c ?lc) =>
+        let c := constr:(interpret c l) in
+        let c := eval compute in c in
+        match lc with
+        | lceq ?c1 (lceq ?c2 _) =>
+          (* this case is not tested *)
+          let lc := constr:(interpret_list lc l) in
+          let c1 := constr:(interpret c1 l) in
+          let c2 := constr:(interpret c2 l) in
+          let p0 := constr:(interpret p0 l) in
+          let e := constr:(combine lc lp) in
+          idtac "p0 := "; print_exp p0;
+          idtac "c := "c;
+          idtac "d := 1";
+          idtac "lc := "; print_exp lc;
+          idtac "c1 := "; print_exp c1;
+          idtac "c2 := "; print_exp c2;
+          idtac "e := "; print_exp e;
+          match c with
+          | 1%Z =>
+            intros; exists c1; simplZ;
+            intros; exists c2; simplZ
+          | _ => fail 100 "The constant c = "c" is not 1."
+          end;
+          let Hgb1 := fresh "Hgb" in
+          let Hgb2 := fresh "Hgb" in
+          gb_rewrite p p0; gb_rewrite p0 e;
+          repeat equalities_to_goal2;
+          repeat rewrite_with_goal_in_goal;
+          ring
+        end
+      | lceq (Pow ?p0 1%positive) (lceq ?c ?lc) =>
+        fail 100 "Tactic fails when d = 1."
+      | lceq (Pow ?p0 ?d) (lceq ?c ?lc) =>
+        fail 100 "d = "d" but only 1 is supported."
+      | lceq (Const ?p0 ?d)  (lceq ?c ?lc) => (* d = 0 *)
+        let c := constr:(interpret c l) in
+        let c := eval compute in c in
+        match lc with
+        | lceq ?c1 (lceq ?c2 _) =>
+          let lc := constr:(interpret_list lc l) in
+          let c1 := constr:(interpret c1 l) in
+          let c2 := constr:(interpret c2 l) in
+          let e := constr:(combine lc lp) in
+          idtac "p0 = "; print_exp p0;
+          idtac "c = "c;
+          idtac "d = 0";
+          idtac "lc = "; print_exp lc;
+          idtac "c1 = "; print_exp c1;
+          idtac "c2 = "; print_exp c2;
+          idtac "e = "; print_exp e;
+          match c with
+          | 1%Z => intros; exists c1; simplZ; intros; exists c2; simplZ
+          | _ => (* exists (c1 / c) *) fail 100 "The constant c = "c" is not 1."
+          end; (* check the constant c *)
+          let Hgb := fresh "Hgb" in
+          cut (c = e); simplZ; [idtac | ring];
+          repeat equalities_to_goal2;
+          repeat rewrite_with_goal_in_goal;
+          intro Hgb; ring_simplify in Hgb; ring_simplify; auto
+        end
+      end (* end of match t *)
+    )
+  end.
+
+Ltac gb_exists program :=
+  (gb_exists1 program) || (gb_exists2 program).
+
 Definition divides (a b : Z) := exists c : Z, b = c * a.
 Definition modulo (a b p : Z) := exists k : Z, a - b = k * p.
 Definition ideal (x a b : Z) := exists u : Z, exists v : Z, x = u * a + v * b.
@@ -508,11 +725,22 @@ Ltac gbarith_unfold:=
           | |- (coprime ?a ?b) => unfold coprime
           end).
 
+Ltac gbarith_choice_original program :=
+  try split;
+  intros;
+  gbarith_unfold;
+  gb_exists_original program.
+
 Ltac gbarith_choice program :=
   try split;
   intros;
   gbarith_unfold;
   gb_exists program.
+
+Ltac gbarith_original :=
+  gbarith_choice_original JCF1 ||
+  gbarith_choice_original JCF2 ||
+  gbarith_choice_original LT.
 
 Ltac gbarith :=
   gbarith_choice JCF1 || gbarith_choice JCF2 || gbarith_choice LT.
