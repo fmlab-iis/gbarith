@@ -34,6 +34,8 @@ let hash_coef x =
 
 type coef = Entiers.entiers
 let coef_of_int = Entiers.ent_of_int
+let coef_of_string = Entiers.ent_of_string
+let coef_of_big_int n = coef_of_string (Big_int.string_of_big_int n)
 let eq_coef = Entiers.eq_ent
 let lt_coef = Entiers.lt_ent
 let le_coef = Entiers.le_ent

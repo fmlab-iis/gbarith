@@ -64,7 +64,7 @@ Goal forall a b c d e s1 s2 s3 s4 s5 : R,
     s5 = a * b * c * d * e ->
     a^5 - s1 * a^4 + s2 * a^3 - s3 * a^2 + s4 * a - s5 = 0.
 Proof.
-  Time gbR_choice JCF1.
+  Time gbR_choice SingularR.
 Qed.
 
 Record point : Type :=
@@ -86,6 +86,7 @@ Ltac elimex :=
   | H : _ /\ _ |- _ => decompose [and] H; clear H
   end.
 
+(* The following lemma can be proved with JCF1 quickly. *)
 Lemma pappus : forall A B C A' B' C' D E F : point,
     (X A') = 0 -> (X B') = 0 -> (X C') = 0 ->
     (Y A) = 0 -> (Y B) = 0 -> (Y C) = 0 ->
@@ -105,7 +106,7 @@ Proof.
   rewrite H4 in *;clear H4.
   repeat elimex.
   Set Printing Depth 10000.
-  gbR_choice JCF1.
+  Time gbR_choice JCF1.
 Qed.
 
 (** ==========  gbZ ========== *)
@@ -362,5 +363,18 @@ Qed.
    c1 = x1 - x0 *)
 Goal forall x y a n : Z, modulo (x^2) a n -> modulo (y^2) a n -> divides n ((x + y) * (x - y)).
 Proof.
+  gbarith.
+Qed.
+
+(** ==========  Examples that cannot be proved by gbarith_original ========== *)
+
+Goal
+  forall a b c : Z,
+    b - 16 * a = 0 ->
+    c - 3 * a = 0 ->
+    modulo b c 13.
+Proof.
+  gbarith_original.
+  Undo.
   gbarith.
 Qed.

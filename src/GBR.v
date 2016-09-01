@@ -440,6 +440,8 @@ Ltac gbR_choice program :=
    | LT => idtac "(* with L.Thery algorithm, proved in Coq *)"
    | JCF1 => idtac "(* with JC.Faugere algorithm GB *)"
    | JCF2 => idtac "(* with JC.Faugere algorithm F4 *)"
+   | SingularR => idtac "(* with SingularR *)"
+   | SingularZ => idtac "(* with SingularZ *)"
   end;
   gbR_begin;
   match goal with
@@ -462,4 +464,4 @@ end.
 
 Ltac check_gbR p lp l t := gbR_end p lp l t.
 
-Ltac gbR := gbR_choice JCF1 || gbR_choice JCF2 || gbR_choice LT.
+Ltac gbR := gbR_choice SingularR || gbR_choice JCF1 || gbR_choice JCF2 || gbR_choice LT.

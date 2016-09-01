@@ -20,6 +20,8 @@ type version =
   | LT   (* Laurent Théry *)
   | JCF1 (* Jean-Charles Faugere *)
   | JCF2 (* Jean-Charles Faugere *)
+  | SingularR
+  | SingularZ
 
 val cterm_of_oterm : term -> Constr.t
 

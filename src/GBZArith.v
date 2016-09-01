@@ -743,4 +743,4 @@ Ltac gbarith_original :=
   gbarith_choice_original LT.
 
 Ltac gbarith :=
-  gbarith_choice JCF1 || gbarith_choice JCF2 || gbarith_choice LT.
+  gbarith_choice SingularZ || gbarith_choice JCF1 || gbarith_choice JCF2 || gbarith_choice LT.

@@ -20,7 +20,9 @@ Declare ML Module "gbarith_plugin".
 Inductive gb_algorithm : Set :=
 | LT
 | JCF1
-| JCF2.
+| JCF2
+| SingularR
+| SingularZ.
 
 Definition default_gb_algorithm := JCF1.
 

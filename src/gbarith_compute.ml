@@ -10,6 +10,7 @@ exception NotSupportedByMacOS
 
 let fgbascii_path = Filename.concat Filename.current_dir_name "fgbascii"
 let serveur__DMP__Lexp__GINT_path = Filename.concat Filename.current_dir_name "serveur__DMP__Lexp__GINT"
+let singular_path = "Singular"
 
 (* ------------------------------------------------------------------------- *)
 (*  Debugging                                                                *)
@@ -58,7 +59,26 @@ let fresh_id_in_env avoid id env =
 let new_fresh_id avoid id gl =
   fresh_id_in_env avoid id (Proofview.Goal.env gl)
 
+(* ------------------------------------------------------------------------- *)
+(*  Groebner basis engines                                                   *)
+(* ------------------------------------------------------------------------- *)
 
+type version =
+  | LT   (* Laurent Théry *)
+  | JCF1 (* Jean-Charles Faugere *)
+  | JCF2 (* Jean-Charles Faugere *)
+  | SingularR
+  | SingularZ
+
+let default_version = JCF1
+
+let string_of_version v =
+  match v with
+  | LT -> "lt"
+  | JCF1 -> "jcf1"
+  | JCF2 -> "jcf2"
+  | SingularR -> "singular"
+  | SingularZ -> "singular"
 
 (* ------------------------------------------------------------------------- *)
 (*  Positive                                                                 *)
@@ -143,6 +163,8 @@ module CoqTerm = struct
   let _LT : Term.constr lazy_t = lazy (init_constant path "LT")
   let _JCF1 : Term.constr lazy_t = lazy (init_constant path "JCF1")
   let _JCF2 : Term.constr lazy_t = lazy (init_constant path "JCF2")
+  let _SingularR : Term.constr lazy_t = lazy (init_constant path "SingularR")
+  let _SingularZ : Term.constr lazy_t = lazy (init_constant path "SingularZ")
 end
 
 type vname = string
@@ -237,12 +259,16 @@ let rec olineq_of_clineq (t : Constr.t) : lineq =
 (* ------------------------------------------------------------------------- *)
 (*  Copied from gb-keappa by Loïc Pottier except that                        *)
 (*  1. inputfgb and outputfgb are moved to the system default temporary      *)
-(*     directory                                                             *)
+(*     directory,                                                            *)
+(*  2. code of running external Groenber basis engines is moved to top-level *)
+(*     functions,                                                            *)
+(*  3. lire_coefouvarexp and lire_terme are modified to allow big integers,  *)
+(*  4. Singular is added as a Groenber basis engine.                         *)
 (* ------------------------------------------------------------------------- *)
 
 let gbdir = "."
 
-let version = ref ""
+let version = ref default_version
 
 let unix s =
   let r = Unix.system s in
@@ -445,11 +471,11 @@ let lire_coefouvarexp s =
   in
   let (c,v,e) =
     try (Str.search_forward (Str.regexp "\\-*[0-9]+") v 0;
-	 (int_of_string v, "", 1))
+	 (Big_int.big_int_of_string v, "", 1))
     with _ ->
       if String.sub v 0 1 = "-"
-      then (-1,String.sub v 1 ((String.length v)-1),e)
-      else (1,v,e)
+      then (Big_int.big_int_of_int (-1),String.sub v 1 ((String.length v)-1),e)
+      else (Big_int.big_int_of_int 1,v,e)
   in
 (*  trace ("donne c="^(string_of_int c)^", v="^v^", e="^(string_of_int e));*)
   (c,v,e)
@@ -461,7 +487,7 @@ let lire_terme d vars s =
   let m = Array.create (d+1) 0 in
   List.iter
     (fun (c,v,e) ->
-      cm:= mult_coef (!cm) (coef_of_int c);
+      cm:= mult_coef (!cm) (coef_of_big_int c);
       if v<>""
       then m.((rang v vars)+1)<- e
     )
@@ -474,16 +500,17 @@ let lire_pol_fgb d vars s =
   let pol = List.map (lire_terme d vars)  (split_regexp "[\\+]" s) in
   pol
 
+(** Parse the outputs from JCF1 and JCF2. *)
 let lire_fgb s =
-  if !version="jcf1"
+  if !version = JCF1
   then
     (let vars = !Dansideal.name_var in
     let d = List.length vars in
     let s = replace "[\n\t\r]" "" s in
     Str.search_forward (Str.regexp "#C Dimension.*#C Time") s 0;
-    let s1=Str.matched_string s in
+    let s1 = Str.matched_string s in
     Str.search_forward (Str.regexp "\\[.+\\]") s1 0;
-    let s2=Str.matched_string s1 in
+    let s2 = Str.matched_string s1 in
     let s2 = String.sub s2 1 ((String.length s2)-2) in
     let lpol = split_regexp "," s2 in
     List.map (lire_pol_fgb d vars) lpol
@@ -492,23 +519,55 @@ let lire_fgb s =
     let vars = !Dansideal.name_var in
     let d = List.length vars in
     trace "lire_fgb commence";
-    let s= replace "[\n\t\r]" "" s in
+    let s = replace "[\n\t\r]" "" s in
     trace "return vires";
     Str.search_forward (Str.regexp "GROBNER BASIS:.*") s 0;
-    let s1=Str.matched_string s in
+    let s1 = Str.matched_string s in
     trace "GROBNER BASIS trouve";
     Str.search_forward (Str.regexp "\\[.+\\]") s1 0;
-    let s2=Str.matched_string s1 in
+    let s2 = Str.matched_string s1 in
     let s2 = String.sub s2 1 ((String.length s2)-2) in
-    let s2= replace " " "" s2 in
+    let s2 = replace " " "" s2 in
     trace "base trouvee";
     let lpol = split_regexp "," s2 in
     trace "lpol calculee";
 (*    trace ("resultat de fgb:\n"^s2);*)
-    let res=  List.map (lire_pol_fgb d vars) lpol in
+    let res =  List.map (lire_pol_fgb d vars) lpol in
    trace ("res calcule");
     res
    )
+
+let parse_singular_output filename =
+  (* read lines from the output file *)
+  let lines =
+    let lines = ref [] in
+    let ch = open_in filename in
+    let _ =
+      try
+        while true do
+	      let line = input_line ch in
+          let poly =
+            try
+              let i = (String.index line '=') + 1 in
+              let sub = String.sub line i (String.length line - i) in
+              sub
+            with _ ->
+                 trace ("Error in parsing the output from Singular: " ^ line);
+                 failwith "Error in parsing the output from Singular."
+          in
+          lines := poly::!lines;
+	    done
+      with End_of_file ->
+        () in
+    let _ = close_in ch in
+    !lines in
+  (* parse the output *)
+  let res =
+    let vars = !Dansideal.name_var in
+    let d = List.length vars in
+    List.map (lire_pol_fgb d vars) lines in
+  res
+
 
 (* liste de polynomes lpol=p1,...,pn,
    echoue ou rend q1,...,qn,q tq 1=q1*p1+...+qn*pn+q*(1-zp)
@@ -527,168 +586,225 @@ let lire_fgb s =
 
 *)
 
-
-let deg_nullstellensatz lpol p =
-  let inputfgb=Filename.temp_file "inputfgb_" "" in
-  let outputfgb=Filename.temp_file "outputfgb_" "" in
-
+(** Returns a pair of variables and polynomials as the input of Groebner basis computation. *)
+let compute_gb_input lpol p =
   (* lpol = p1, ..., pn *)
   let n = List.length lpol in
   let i = ref 0 in
-  let m= (!nvars) in
-    (*  t=m+2 ei=-i z=m+1*)
-
+  let m = (!nvars) in
+  (*  t = m+2, ei = -i, z = m+1 *)
   (* lpol1 = t*p1-e1, ..., t*pn-en *)
   let lpol1 = List.map (fun pi ->
-                          i:=!i+1;
-                          plusP (multP (x (m+2)) pi) (oppP (x (-(!i)))))
-                lpol in
-    (* polsup = t*(1-z*p) - e0 *)
-  let polsup=(plusP (multP (x (m+2)) (plusP cf1 (oppP (multP (x (m+1)) p)))) (oppP (x 0))) in
-  let lpol1=polsup::lpol1 in
-  let leiej=ref [] in
-   (* ei*ej *)
-    for j=0 to n-1 do
-      for k=j+1 to n do
-        leiej:=(multP (x (-j)) (x (-k)))::(!leiej);
-      done;
+                        i := !i + 1;
+                        plusP (multP (x (m+2)) pi) (oppP (x (-(!i)))))
+                       lpol in
+  (* polsup = t*(1-z*p) - e0 *)
+  let polsup = (plusP (multP (x (m+2)) (plusP cf1 (oppP (multP (x (m+1)) p)))) (oppP (x 0))) in
+  let lpol1 = polsup::lpol1 in
+  let leiej = ref [] in
+  (* ei*ej *)
+  for j = 0 to n - 1 do
+    for k = j + 1 to n do
+      leiej := (multP (x (-j)) (x (-k)))::(!leiej);
     done;
+  done;
+  (* t*ei *)
+  for j = 0 to n do
+    leiej := (multP (x (-j)) (x (m+2)))::(!leiej);
+  done;
+  let lpol1 = (!leiej)@lpol1 in
+  let lvar = ref [] in
+  for i = 0 to n do lvar := (!lvar)@["e"^(string_of_int i)^""]; done;
+  for i = 1 to m do lvar := ["x"^(string_of_int i)^""]@(!lvar); done;
+  lvar := ["t1";"z"]@(!lvar);
+  Dansideal.name_var := !lvar;
+  let lpol1 = List.map (fun p -> pol_rec_to_sparse p (-n-1) (m+2)) lpol1 in
+  let lpols = String.concat ", " (List.map Dansideal.stringP lpol1) in
+  trace ("VARS: " ^ String.concat "," !lvar);
+  trace ("POLS: " ^ lpols);
+  (lvar, lpol1)
 
-    (* t*ei *)
-    for j=0 to n do
-      leiej:=(multP (x (-j)) (x (m+2)))::(!leiej);
-    done;
+let string_of_gb lvar gb =
+  let string_of_mon m =
+    String.concat "*"
+                  (List.filter
+                     (fun str -> str <> "")
+                     (List.mapi (fun i j ->
+                                 (* the first element (i = 0) is the degree *)
+                                 if i = 0 || j = 0 then ""
+                                 else (List.nth !lvar (i-1)) ^
+                                        (if j = 1 then ""
+                                         else "^" ^ string_of_int j))
+                                (Array.to_list m))) in
+  let string_of_coef e =
+    let str = string_of_ent e in
+    if str = "1" then ""
+    else if str = "-1" then "-"
+    else str in
+  let string_of_poly p =
+    String.concat " + " (List.map (fun (e, m) ->
+                                   string_of_coef e ^ string_of_mon m) p) in
+  String.concat "\n" (List.map string_of_poly gb)
 
-    let lpol1=(!leiej)@lpol1 in
-    let lvar=ref [] in
-    for i=0 to n do lvar:=(!lvar)@["e"^(string_of_int i)^""]; done;
-    for i=1 to m do lvar:=["x"^(string_of_int i)^""]@(!lvar); done;
-    lvar:=["t1";"z"]@(!lvar);
-    Dansideal.name_var:=!lvar;
-    let lpol1=List.map (fun p -> pol_rec_to_sparse p (-n-1) (m+2)) lpol1 in
-
-    let lpols=
-      String.concat "," (List.map Dansideal.stringP lpol1)
-    in
-    trace ("POLS: "^lpols);
-
-    let gb=
-      if !version="lt"
-      then  Dansideal.buch (m+n+3) lpol1
-      else
+(** Computes the Groebner basis. *)
+let compute_gb_output lpol lvar lpol1 =
+  let n = List.length lpol in
+  let m = (!nvars) in
+  let inputfgb = Filename.temp_file "inputfgb_" "" in
+  let outputfgb = Filename.temp_file "outputfgb_" "" in
+  if !version = LT
+  then
+    let gb = Dansideal.buch (m+n+3) lpol1 in
+    let _ =
+      trace "OUTPUT GB:";
+      trace (string_of_gb lvar gb) in
+    gb
+  else if !version = SingularR || !version = SingularZ
+  then
+    (* prepare the input to Singular *)
+    let input_text =
+      "ring r = " ^ (if !version = SingularR then "0" else "integer") ^ ", ("
+      ^ (String.concat "," !lvar)
+      ^ "), lp;\n"
+      ^ "ideal I = "
+      ^ (String.concat ",\n" (List.map Dansideal.stringP lpol1)) ^ ";\n"
+      ^ "ideal J = groebner(I);\n"
+      ^ "J;\n"
+      ^ "exit;\n" in
+    let _ =
+      let ch = open_out inputfgb in
+      output_string ch input_text; close_out ch;
+	  trace "INPUT GB:";
+	  unix ("cat " ^ inputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
+      trace "" in
+    (* run Singular *)
+    let _ =
+      unix (singular_path ^ " -q " ^ inputfgb ^ "&> " ^ outputfgb);
+      trace "OUTPUT GB:";
+	  unix ("cat " ^ outputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
+      trace "" in
+    (* parse the output from Singular *)
+    let gb = parse_singular_output outputfgb in
+    let _ =
+      trace "PARSED GB:";
+      trace (string_of_gb lvar gb) in
+    gb
+  else
 	(let textinputfgb =
-	  if !version="jcf1"
-	  then
-	    "#C ./serveur__DMP__Lexp__GINT -pipe2 -read "^inputfgb^"\n"
-	    ^"#vars ["^(String.concat "," !lvar)^"]\n"
-	    ^"#properties [System]\n"
-	    ^"#list\n"
-	    ^"["^(String.concat ",\n" (List.map Dansideal.stringP lpol1))^"]\n"
-	  else
-	    "("^(String.concat "," !lvar)^"),"
-	    ^(replace " " ""
-		(String.concat ","
-		   (List.map Dansideal.stringP lpol1)))
-	in
-	unix ("echo \""^textinputfgb^"\n\" > "^inputfgb);
+	   if !version = JCF1
+	   then
+	     "#C ./serveur__DMP__Lexp__GINT -pipe2 -read " ^ inputfgb ^ "\n"
+	     ^ "#vars ["^(String.concat "," !lvar)^"]\n"
+	     ^ "#properties [System]\n"
+	     ^ "#list\n"
+	     ^ "["^(String.concat ",\n" (List.map Dansideal.stringP lpol1)) ^ "]\n"
+	   else
+	     "(" ^ (String.concat "," !lvar) ^ "),"
+	     ^ (replace " " ""
+		            (String.concat ","
+		                           (List.map Dansideal.stringP lpol1)))
+	 in
+	 unix ("echo \"" ^ textinputfgb ^ "\n\" > " ^ inputfgb);
+	 let fgbcom =
+	   if !version = JCF1
+	   then
+	     serveur__DMP__Lexp__GINT_path ^ " -pipe2 -read " ^ inputfgb ^ " >" ^ outputfgb
+	   else
+	     fgbascii_path ^ " <" ^ inputfgb ^ " 2>" ^ outputfgb in
+	 trace "INPUT GB:";
+	 unix ("cat " ^ inputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
+	 unix fgbcom;
+	 trace "OUTPUT GB:";
+	 unix ("cat " ^ outputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
+	 let contenu = read_string2 outputfgb in
+	 trace "Contenu lu";
+	 let gb = lire_fgb contenu in
+	 trace "Base de grobner lue";
+	 (*unix ("rm -f "^inputfgb);
+       unix ("rm -f "^outputfgb);*)
+	 gb)
 
-	let fgbcom=
-	  if !version="jcf1"
-	  then
-	    serveur__DMP__Lexp__GINT_path ^ " -pipe2 -read "^inputfgb^" >"^outputfgb
-	  else
-	    fgbascii_path ^ " <"^inputfgb^" 2>"^outputfgb in
-
-	trace "INPUT GB:";
-	unix ("cat "^inputfgb^" >>  "^gbdir^"/log_gb");
-	unix fgbcom;
-	trace "OUTPUT GB:";
-	unix ("cat "^outputfgb^" >>  "^gbdir^"/log_gb");
-
-	let contenu=read_string2 outputfgb in
-	trace "Contenu lu";
-	let gb = lire_fgb contenu  in
-	trace "Base de grobner lue";
-
-	(*unix ("rm -f "^inputfgb);
-	unix ("rm -f "^outputfgb);*)
-	gb)
-    in
-
-    (* on garde les polynomes de gb avec t de degre 1 dans le monome dominant
+let deg_nullstellensatz lpol p =
+  (* lpol = p1, ..., pn *)
+  let n = List.length lpol in
+  let m = (!nvars) in
+  (*  t=m+2 ei=-i z=m+1*)
+  let (lvar, lpol1) = compute_gb_input lpol p in
+  let gb = compute_gb_output lpol lvar lpol1 in
+  (* on garde les polynomes de gb avec t de degre 1 dans le monome dominant
      normalement, il ne doit y en avoir qu'un *)
-    let q = (List.filter
-	       (fun p -> match p with
-		 [] -> false
-	       |(_,mon)::_ -> mon.(1)=1)
-               gb) in
-    let q' = List.nth q 0 in
-    let lq = ref [] in
-    let degz = ref 0 in
-    for i=1 to n+1 do
-      let i0=n+m+4-i in
-      (* les monomes qui sont construits a l'aide de ei *)
-      let qi=List.filter
-	  (fun p ->
-	    match p with
-              (_,mon) ->  mon.(i0)>0
-	  )
+  let q = (List.filter
+	         (fun p -> match p with
+		                 [] -> false
+	                   | (_,mon)::_ -> mon.(1) = 1)
+             gb) in
+  let q' = List.nth q 0 in
+  let lq = ref [] in
+  let degz = ref 0 in
+  for i = 1 to n + 1 do
+    let i0 = n + m + 4 - i in
+    (* les monomes qui sont construits a l'aide de ei *)
+    let qi = List.filter
+	           (fun p ->
+	            match p with
+                  (_,mon) ->  mon.(i0) > 0
+	           )
           q' in
-      (* mutiliplier par le coef de e (1 ou -1) dans q' *)
-      let qi = List.map
-	  (fun p ->
-	    match p with
-              (a,mon) ->
-		((mult_coef a
-		    (opp_coef
-		       (coef_of_int
-			  (signe_coef (fst (List.nth q' 0)))))),mon))
-	  qi in
-      (* on enleve ei *)
-      let qqi = List.map
-	  (fun p ->
-            let mon =snd p in
-            let c = fst p in
-            let mon1=Array.copy mon in
-            mon1.(i0)<-mon.(i0)-1;
-            (c,mon1))
-	  qi in
-      (* et on regarde le degre de z *)
-      List.iter
-	(fun qi ->
-          let deg' = (snd qi).(2) in
-          (if (compare deg' !degz)=1 then
-	    degz:=deg'))
-	qqi;
-      lq:=[qqi]@(!lq);
-    done;
+    (* mutiliplier par le coef de e (1 ou -1) dans q' *)
+    let qi = List.map
+	           (fun p ->
+	            match p with
+                  (a,mon) ->
+		          ((mult_coef a
+		                      (opp_coef
+		                         (coef_of_int
+			                        (signe_coef (fst (List.nth q' 0)))))), mon))
+	           qi in
+    (* on enleve ei *)
+    let qqi = List.map
+	            (fun p ->
+                 let mon = snd p in
+                 let c = fst p in
+                 let mon1 = Array.copy mon in
+                 mon1.(i0) <- mon.(i0) - 1;
+                 (c,mon1))
+	            qi in
+    (* et on regarde le degre de z *)
+    List.iter
+	  (fun qi ->
+       let deg' = (snd qi).(2) in
+       (if (compare deg' !degz) = 1 then
+	      degz := deg'))
+	  qqi;
+    lq := [qqi]@(!lq);
+  done;
 
-    let pi=pol_rec_to_sparse p (-n-1) (m+2) in
-    lq := List.map
-	(fun hi ->
-	  (* z^a devient z^(degz-a) *)
-	  let gi = Dansideal.specialsubstP (m+3) hi 2 !degz in
-	  (*z devient p*)
-	  Dansideal.substP (m+3) gi 2 pi)
-	!lq;
+  let pi = pol_rec_to_sparse p (-n-1) (m+2) in
+  lq := List.map
+	      (fun hi ->
+	       (* z^a devient z^(degz-a) *)
+	       let gi = Dansideal.specialsubstP (m+3) hi 2 !degz in
+	       (*z devient p*)
+	       Dansideal.substP (m+3) gi 2 pi)
+	      !lq;
 
-    let lqr=List.map (fun p->pol_sparse_to_rec (-n-1) (m+2) p) !lq in
+  let lqr = List.map (fun p->pol_sparse_to_rec (-n-1) (m+2) p) !lq in
 
-    let specialcoef = fst (List.nth q' 0) in
-    let coefs=
-      String.concat ",\n" (List.map string_of_P lqr)
-    in
-    trace ("degre: "^(string_of_int !degz)^"\n"
-		 ^"coefficients:\n "^coefs);
-    trace ("ce polynome doit etre nul:"
-	     ^"("^(string_of_P p)^")^"^(string_of_int !degz)
-	   ^"\n-("
-	   ^(String.concat "\n+"
-	       (List.map2
-		  (fun c p -> "("^(string_of_P c)^")*("^(string_of_P p)^")")
-		  (List.tl lqr) lpol))
-	       ^")");
-    (specialcoef,(lqr,!degz))
+  let specialcoef = fst (List.nth q' 0) in
+  let coefs =
+    String.concat ",\n" (List.map string_of_P lqr)
+  in
+  trace ("degre: " ^ (string_of_int !degz) ^ "\n"
+		 ^ "coefficients:\n " ^ coefs);
+  trace ("ce polynome doit etre nul:"
+	     ^ "(" ^ (string_of_P p) ^ ")^" ^ (string_of_int !degz)
+	     ^ "\n-("
+	     ^ (String.concat "\n+"
+	                      (List.map2
+		                     (fun c p -> "(" ^ (string_of_P c) ^ ")*(" ^ (string_of_P p) ^ ")")
+		                     (List.tl lqr) lpol))
+	     ^ ")");
+  (specialcoef, (lqr, !degz))
 ;;
 
 (* calcul de l'exposant et des coefficients de la combinaison lineaire *)
@@ -715,22 +831,11 @@ let comb_lin1 lp =
 (*  Main entry point                                                         *)
 (* ------------------------------------------------------------------------- *)
 
-type version =
-  | LT   (* Laurent Théry *)
-  | JCF1 (* Jean-Charles Faugere *)
-  | JCF2 (* Jean-Charles Faugere *)
-
-let default_version = JCF1
-
-let string_of_version v =
-  match v with
-  | LT -> "lt"
-  | JCF1 -> "jcf1"
-  | JCF2 -> "jcf2"
-
 let coq_lt = 1
 let coq_jcf1 = 2
 let coq_jcf2 = 3
+let coq_singularR = 4
+let coq_singularZ = 5
 
 let convert_coq_version (v : Globnames.global_reference) : version =
   match v with
@@ -738,6 +843,8 @@ let convert_coq_version (v : Globnames.global_reference) : version =
      if idx = coq_lt then LT
      else if idx = coq_jcf1 then JCF1
      else if idx = coq_jcf2 then JCF2
+     else if idx = coq_singularR then SingularR
+     else if idx = coq_singularZ then SingularZ
      else failwith "Unknown algorithm."
   | Globnames.ConstRef cr ->
      begin
@@ -747,6 +854,8 @@ let convert_coq_version (v : Globnames.global_reference) : version =
         if Constr.equal c (Lazy.force CoqTerm._LT) then LT
         else if Constr.equal c (Lazy.force CoqTerm._JCF1) then JCF1
         else if Constr.equal c (Lazy.force CoqTerm._JCF2) then JCF2
+        else if Constr.equal c (Lazy.force CoqTerm._SingularR) then SingularR
+        else if Constr.equal c (Lazy.force CoqTerm._SingularZ) then SingularZ
         else failwith "Unknown algorithm."
      end
   | _ -> failwith "Unknown algorithm."
@@ -775,6 +884,6 @@ let gb_compute ?version:ver lp =
   else
     let ver_str = string_of_version ver in
     let _ = trace ("Version: " ^ ver_str) in
-    let _ = version := ver_str in
+    let _ = version := ver in
     let lc = comb_lin1 lp in
     lc
