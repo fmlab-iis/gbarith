@@ -271,7 +271,7 @@ Ltac gbZ_begin :=
   repeat equalities_to_goal.
 
 Ltac simplZ2 :=
-   cbv beta iota zeta delta -[Zmult Zplus Zpower Zminus Zopp Zdiv Zmod].
+   cbv beta iota zeta delta -[Zmult Zplus Zpower Z.pow_pos Zminus Zopp Zdiv Zmod].
 
 Lemma gbsimplZ1 : forall x : Z, x ^ 1 = x.
 Proof.
