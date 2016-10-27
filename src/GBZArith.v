@@ -308,10 +308,26 @@ Proof.
   intros; ring.
 Qed.
 
+Lemma gbsimplZ8 n p :
+  Z.pow_pos n p = n ^ (Zpos p).
+Proof.
+  rewrite Zpower_pos_nat.
+  rewrite Zpower_nat_Z.
+  rewrite positive_nat_Z.
+  reflexivity.
+Qed.
+
+Lemma gbsimplZ9 n p :
+  Zpower_nat n p = n ^ (Z.of_nat p).
+Proof.
+  rewrite Zpower_nat_Z.
+  reflexivity.
+Qed.
+
 Ltac simplZ3 :=
   repeat (rewrite gbsimplZ1 || rewrite gbsimplZ2 || rewrite gbsimplZ3
           || rewrite gbsimplZ4 || rewrite gbsimplZ5 || rewrite gbsimplZ6
-          || rewrite gbsimplZ7).
+          || rewrite gbsimplZ7 || rewrite gbsimplZ8 || rewrite gbsimplZ9).
 
 Ltac simplZ := simplZ2; simplZ3.
 
