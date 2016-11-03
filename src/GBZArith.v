@@ -626,7 +626,12 @@ Ltac gb_exists1 program :=
           idtac "lc := "; print_exp lc;
           idtac "c1 := "; print_exp c1;
           idtac "e := "; print_exp e;
-          exists a; rewrite Z.mul_1_l; reflexivity
+          let c1 := eval compute in c1 in
+          match c1 with
+          | 0%Z => exists c1; rewrite Z.mul_0_r; ring
+          | 1%Z => exists c1; rewrite Z.mul_1_r; reflexivity
+          | _ => fail 100 "Fail with constant c1 ="c1"."
+          end
         end
       end (* end of match t *)
     )
