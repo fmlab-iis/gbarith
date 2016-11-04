@@ -679,7 +679,7 @@ let compute_gb_output lpol lvar lpol1 =
       trace "" in
     (* run Singular *)
     let _ =
-      unix (singular_path ^ " -q " ^ inputfgb ^ " 1> " ^ outputfgb ^ " 2>1");
+      unix (singular_path ^ " -q " ^ inputfgb ^ " 1> " ^ outputfgb ^ " 2>&1");
       trace "OUTPUT GB:";
 	  unix ("cat " ^ outputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
       trace "" in
