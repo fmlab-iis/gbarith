@@ -311,10 +311,7 @@ Qed.
 Lemma gbsimplZ8 n p :
   Z.pow_pos n p = n ^ (Zpos p).
 Proof.
-  rewrite Zpower_pos_nat.
-  rewrite Zpower_nat_Z.
-  rewrite positive_nat_Z.
-  reflexivity.
+  exact (Z.pow_pos_fold n p).
 Qed.
 
 Lemma gbsimplZ9 n p :
@@ -753,6 +750,8 @@ Ltac gbarith_choice_original program :=
   gb_exists_original program.
 
 Ltac gbarith_choice program :=
+  repeat rewrite Z.pow_pos_fold in *;
+  repeat rewrite Zpower_nat_Z in *;
   try split;
   intros;
   gbarith_unfold;
