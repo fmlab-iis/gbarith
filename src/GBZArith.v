@@ -602,11 +602,10 @@ Ltac gb_exists1 program :=
           simplZ;
           gb_rewrite p p0; gb_rewrite p0 e;
           repeat equalities_to_goal2;
+          simplZ; (* simplify all such that rewrite will work *)
           repeat rewrite_with_goal_in_goal;
-          ring
+          ring || idtac "Tactic fails when d = 1."
         end
-      | lceq (Pow ?p0 1%positive) (lceq ?c ?lc) =>
-        fail 100 "Tactic fails when d = 1."
       | lceq (Pow ?p0 ?d) (lceq ?c ?lc) =>
         fail 100 "d = "d" but only 1 is supported."
       | lceq (Const ?p0 ?d)  (lceq ?c ?lc) => (* d = 0, ?b = 1 *)
@@ -679,15 +678,12 @@ Ltac gb_exists2 program :=
             intros; exists c2; simplZ
           | _ => fail 100 "The constant c = "c" is not 1."
           end;
-          let Hgb1 := fresh "Hgb" in
-          let Hgb2 := fresh "Hgb" in
           gb_rewrite p p0; gb_rewrite p0 e;
           repeat equalities_to_goal2;
+          simplZ;
           repeat rewrite_with_goal_in_goal;
-          ring
+          ring || idtac "Tactic fails when d = 1."
         end
-      | lceq (Pow ?p0 1%positive) (lceq ?c ?lc) =>
-        fail 100 "Tactic fails when d = 1."
       | lceq (Pow ?p0 ?d) (lceq ?c ?lc) =>
         fail 100 "d = "d" but only 1 is supported."
       | lceq (Const ?p0 ?d)  (lceq ?c ?lc) => (* d = 0 *)
