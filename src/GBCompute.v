@@ -22,7 +22,9 @@ Inductive gb_algorithm : Set :=
 | JCF1
 | JCF2
 | SingularR
-| SingularZ.
+| SingularZ
+| MagmaR
+| MagmaZ.
 
 Definition default_gb_algorithm := JCF1.
 

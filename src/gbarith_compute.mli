@@ -22,6 +22,8 @@ type version =
   | JCF2 (* Jean-Charles Faugere *)
   | SingularR
   | SingularZ
+  | MagmaR
+  | MagmaZ
 
 val cterm_of_oterm : term -> Constr.t
 

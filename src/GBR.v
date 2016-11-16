@@ -442,6 +442,8 @@ Ltac gbR_choice program :=
    | JCF2 => idtac "(* with JC.Faugere algorithm F4 *)"
    | SingularR => idtac "(* with SingularR *)"
    | SingularZ => idtac "(* with SingularZ *)"
+   | MagmaR => idtac "(* with MagmaR *)"
+   | MagmaZ => idtac "(* with MagmaZ *)"
   end;
   gbR_begin;
   match goal with

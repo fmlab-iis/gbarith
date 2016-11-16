@@ -23,7 +23,7 @@ coq: Makefile.coq
 Makefile.coq: Makefile $(MODULES)
 	coq_makefile \
 	-I $(ROOT)src \
-	-R $(ROOT)src $(NAME) \
+	-Q $(ROOT)src $(NAME) \
 	$(MODULES) -o Makefile.coq
 
 clean:: Makefile.coq

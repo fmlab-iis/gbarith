@@ -11,6 +11,7 @@ exception NotSupportedByMacOS
 let fgbascii_path = Filename.concat Filename.current_dir_name "fgbascii"
 let serveur__DMP__Lexp__GINT_path = Filename.concat Filename.current_dir_name "serveur__DMP__Lexp__GINT"
 let singular_path = "Singular"
+let magma_path = "magma"
 
 (* ------------------------------------------------------------------------- *)
 (*  Debugging                                                                *)
@@ -69,6 +70,8 @@ type version =
   | JCF2 (* Jean-Charles Faugere *)
   | SingularR
   | SingularZ
+  | MagmaR
+  | MagmaZ
 
 let default_version = JCF1
 
@@ -77,8 +80,10 @@ let string_of_version v =
   | LT -> "lt"
   | JCF1 -> "jcf1"
   | JCF2 -> "jcf2"
-  | SingularR -> "singular"
+  | SingularR
   | SingularZ -> "singular"
+  | MagmaR
+  | MagmaZ -> "magma"
 
 (* ------------------------------------------------------------------------- *)
 (*  Positive                                                                 *)
@@ -165,6 +170,8 @@ module CoqTerm = struct
   let _JCF2 : Term.constr lazy_t = lazy (init_constant path "JCF2")
   let _SingularR : Term.constr lazy_t = lazy (init_constant path "SingularR")
   let _SingularZ : Term.constr lazy_t = lazy (init_constant path "SingularZ")
+  let _MagmaR : Term.constr lazy_t = lazy (init_constant path "MagmaR")
+  let _MagmaZ : Term.constr lazy_t = lazy (init_constant path "MagmaZ")
 end
 
 type vname = string
@@ -379,7 +386,7 @@ let rec pol_rec_to_sparse p v1 v2 =  (* v1 et v2 indices de début et de fin *)
         Pint a ->
           if a= coef0
           then []
-          else [a, Array.create (d+1) 0]
+          else [a, Array.make (d+1) 0]
       |Prec(v,coefs)->
          let vp=Dansideal.gen d (v2-v+1) in (*j'aurais dit v2-v-1*)
          let res=ref [] in
@@ -484,7 +491,7 @@ let lire_terme d vars s =
   let t = split_regexp "[\\*]" s in
   let lve= List.map lire_coefouvarexp  t in
   let cm = ref coef1 in
-  let m = Array.create (d+1) 0 in
+  let m = Array.make (d+1) 0 in
   List.iter
     (fun (c,v,e) ->
       cm:= mult_coef (!cm) (coef_of_big_int c);
@@ -556,6 +563,45 @@ let parse_singular_output filename =
                  failwith "Error in parsing the output from Singular."
           in
           lines := poly::!lines;
+	    done
+      with End_of_file ->
+        () in
+    let _ = close_in ch in
+    !lines in
+  (* parse the output *)
+  let res =
+    let vars = !Dansideal.name_var in
+    let d = List.length vars in
+    List.map (lire_pol_fgb d vars) lines in
+  res
+
+let parse_magma_output filename =
+  (* read lines from the output file *)
+  let lines =
+    let lines = ref [] in
+    let ch = open_in filename in
+    let pbegin = ref false in
+    let pend = ref false in
+    let buffer = ref "" in
+    let add_buffer str = buffer := !buffer ^ str in
+    let process_buffer () =
+      if !buffer = "" then ()
+      else
+        let str = Str.global_replace (Str.regexp_string " ") "" !buffer in
+        let _ = trace ("Poly: '" ^ str ^ "'") in
+        lines := str::!lines; buffer := "" in
+    let _ =
+      try
+        while not !pend do
+	      let line = input_line ch in
+          let _ = trace ("Line: '" ^ line ^ "'") in
+          if line = "[" then pbegin := true
+          else if line = "]" then (process_buffer(); pend := true)
+          else if !pbegin then
+            let str = String.trim line in
+            if String.sub str (String.length str - 1) 1 = ","
+            then (add_buffer (String.sub str 0 (String.length str - 1)); process_buffer())
+            else add_buffer str
 	    done
       with End_of_file ->
         () in
@@ -685,6 +731,35 @@ let compute_gb_output lpol lvar lpol1 =
       trace "" in
     (* parse the output from Singular *)
     let gb = parse_singular_output outputfgb in
+    let _ =
+      trace "PARSED GB:";
+      trace (string_of_gb lvar gb) in
+    gb
+  else if !version = MagmaR || !version = MagmaZ
+  then
+    (* prepare the input to magma *)
+    let input_text =
+      "R := " ^ (if !version = MagmaR then "RationalField()" else "IntegerRing()") ^ ";\n"
+      ^ "S<" ^ (String.concat "," !lvar) ^ "> := PolynomialRing(R, " ^ string_of_int (List.length !lvar) ^ ");\n"
+      ^ "I := [\n"
+      ^ (String.concat ",\n" (List.map Dansideal.stringP lpol1)) ^ "\n];\n"
+      ^ "J := GroebnerBasis(I);\n"
+      ^ "J;\n"
+      ^ "exit;\n" in
+    let _ =
+      let ch = open_out inputfgb in
+      output_string ch input_text; close_out ch;
+	  trace "INPUT GB:";
+	  unix ("cat " ^ inputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
+      trace "" in
+    (* run magma *)
+    let _ =
+      unix (magma_path ^ " " ^ inputfgb ^ " 1> " ^ outputfgb ^ " 2>&1");
+      trace "OUTPUT GB:";
+	  unix ("cat " ^ outputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
+      trace "" in
+    (* parse the output from magma *)
+    let gb = parse_magma_output outputfgb in
     let _ =
       trace "PARSED GB:";
       trace (string_of_gb lvar gb) in
@@ -836,6 +911,8 @@ let coq_jcf1 = 2
 let coq_jcf2 = 3
 let coq_singularR = 4
 let coq_singularZ = 5
+let coq_magmaR = 6
+let coq_magmaZ = 7
 
 let convert_coq_version (v : Globnames.global_reference) : version =
   match v with
@@ -845,6 +922,8 @@ let convert_coq_version (v : Globnames.global_reference) : version =
      else if idx = coq_jcf2 then JCF2
      else if idx = coq_singularR then SingularR
      else if idx = coq_singularZ then SingularZ
+     else if idx = coq_magmaR then MagmaR
+     else if idx = coq_magmaZ then MagmaZ
      else failwith "Unknown algorithm."
   | Globnames.ConstRef cr ->
      begin
@@ -856,6 +935,8 @@ let convert_coq_version (v : Globnames.global_reference) : version =
         else if Constr.equal c (Lazy.force CoqTerm._JCF2) then JCF2
         else if Constr.equal c (Lazy.force CoqTerm._SingularR) then SingularR
         else if Constr.equal c (Lazy.force CoqTerm._SingularZ) then SingularZ
+        else if Constr.equal c (Lazy.force CoqTerm._MagmaR) then MagmaR
+        else if Constr.equal c (Lazy.force CoqTerm._MagmaZ) then MagmaZ
         else failwith "Unknown algorithm."
      end
   | _ -> failwith "Unknown algorithm."
