@@ -725,7 +725,10 @@ let compute_gb_output lpol lvar lpol1 =
       trace "" in
     (* run Singular *)
     let _ =
+      let t1 = Unix.gettimeofday() in
       unix (singular_path ^ " -q " ^ inputfgb ^ " 1> " ^ outputfgb ^ " 2>&1");
+      let t2 = Unix.gettimeofday() in
+      trace ("Execution time of Singular: " ^ string_of_float (t2 -. t1) ^ " seconds");
       trace "OUTPUT GB:";
 	  unix ("cat " ^ outputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
       trace "" in
@@ -754,7 +757,10 @@ let compute_gb_output lpol lvar lpol1 =
       trace "" in
     (* run magma *)
     let _ =
+      let t1 = Unix.gettimeofday() in
       unix (magma_path ^ " " ^ inputfgb ^ " 1> " ^ outputfgb ^ " 2>&1");
+      let t2 = Unix.gettimeofday() in
+      trace ("Execution time of Magma: " ^ string_of_float (t2 -. t1) ^ " seconds");
       trace "OUTPUT GB:";
 	  unix ("cat " ^ outputfgb ^ " >>  " ^ gbdir ^ "/log_gb");
       trace "" in
