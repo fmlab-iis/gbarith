@@ -714,7 +714,7 @@ let compute_gb_output lpol lvar lpol1 =
       ^ "), lp;\n"
       ^ "ideal I = "
       ^ (String.concat ",\n" (List.map Dansideal.stringP lpol1)) ^ ";\n"
-      ^ "ideal J = groebner(I);\n"
+      ^ "ideal J = std(I);\n"
       ^ "J;\n"
       ^ "exit;\n" in
     let _ =
