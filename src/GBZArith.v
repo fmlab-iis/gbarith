@@ -526,7 +526,14 @@ Ltac gb_get_goal :=
 
 Ltac gb_rewrite f t :=
   let Hgb := fresh "Hgb" in
-  cut (f = t); simplZ; [idtac | ring];
+  cut (f = t); simplZ;
+  [idtac | try ring || (
+                 fail 100 "Failed to do gb_rewrite."
+                      "Ring does not solve f = t where f = "
+                      f
+                      " and t = "
+                      t
+  )];
   match goal with
   | |- ?a = ?b -> _ =>
     intro Hgb; try pattern a at 1; try rewrite Hgb; clear Hgb
@@ -573,7 +580,7 @@ Ltac gb_exists1 program :=
       idtac "lp := "; print_exp lp;
       idtac "t := "; idtac t;
       idtac "t := "; print_exp (interpret_list t l);
-      match t with
+      lazymatch t with
       | lceq (Pow ?p0 1%positive) (lceq ?c ?lc) =>
         let c := constr:(interpret c l) in
         let c := eval compute in c in
