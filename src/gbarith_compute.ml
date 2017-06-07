@@ -807,6 +807,7 @@ let compute_gb_output lpol lvar lpol1 =
 
 let deg_nullstellensatz lpol p =
   (* lpol = p1, ..., pn *)
+  let success = ref true in
   let n = List.length lpol in
   let m = (!nvars) in
   (*  t=m+2 ei=-i z=m+1*)
@@ -818,8 +819,24 @@ let deg_nullstellensatz lpol p =
 	         (fun p -> match p with
 		                 [] -> false
 	                   | (_,mon)::_ -> mon.(1) = 1)
-             gb) in
-  let q' = List.nth q 0 in
+                 gb) in
+  (* let q' = List.nth q 0 in *)
+  let q' =
+    let one = coef_of_big_int Big_int.unit_big_int in
+    let all_zeros_but_one mon = mon.(0) = 1 && mon.(1) = 1 in
+    let intended = List.filter
+                     (fun p -> match p with
+                                 [] -> false
+                               | (coef, mon)::_ ->
+                                  (eq_coef (abs_coef coef) one) &&
+                                    all_zeros_but_one mon)
+                     q in
+    if List.length intended = 0 then
+      let _ = trace ("gbarith_compute.deg_nullstellensatz fails") in
+      let _ = success := false in
+      List.nth q 0 (* fall back to original *)
+    else
+      List.nth intended 0 in
   let lq = ref [] in
   let degz = ref 0 in
   for i = 1 to n + 1 do
@@ -885,7 +902,11 @@ let deg_nullstellensatz lpol p =
 		                     (fun c p -> "(" ^ (string_of_P c) ^ ")*(" ^ (string_of_P p) ^ ")")
 		                     (List.tl lqr) lpol))
 	     ^ ")");
-  (specialcoef, (lqr, !degz))
+  if !success then
+    (specialcoef, (lqr, !degz))
+  else
+    let dummy = Pint coef0 in
+    (coef_of_big_int Big_int.unit_big_int, ([dummy; dummy], 1))
 ;;
 
 (* calcul de l'exposant et des coefficients de la combinaison lineaire *)
