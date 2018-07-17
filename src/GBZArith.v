@@ -24,7 +24,7 @@ Ltac NCst t :=
   match t with
   | O => constr:(1%positive)
   | Zpos ?t1 => t1
-  | _ => constr:false
+  | _ => constr:(false)
   end.
 
 (********************************************)
@@ -33,9 +33,9 @@ Ltac NCst t :=
 
 Ltac rIN a l :=
   match l with
-  | (cons a ?l) => constr:true
+  | (cons a ?l) => constr:(true)
   | (cons _ ?l) => rIN a l
-  | _ => constr:false
+  | _ => constr:(false)
   end.
 
 (********************************************)
@@ -44,7 +44,7 @@ Ltac rIN a l :=
 
 Ltac rAddFv a l :=
   match (rIN a l) with
-  | true => constr:l
+  | true => constr:(l)
   | _ => constr:(cons a l)
   end.
 
@@ -54,13 +54,13 @@ Ltac rAddFv a l :=
 
 Ltac rFind_at a l :=
   match l with
-  | (cons a _) => constr:xH
+  | (cons a _) => constr:(xH)
   | (cons _ ?l) =>
     let p := rFind_at a l in
-    let v := constr:(Psucc p) in
+    let v := constr:(Pos.succ p) in
     let v1 := eval compute in v in
     v1
-  | _ => constr:xH
+  | _ => constr:(xH)
  end.
 
 (********************************************)
@@ -77,28 +77,28 @@ Ltac variables t :=
   | False  => fv
   | ?t1 -> ?g1 =>
     let fv1  := aux t1 fv in
-    let fv2  := aux g1 fv1 in constr: fv2
+    let fv2  := aux g1 fv1 in constr:(fv2)
   | (_ <= ?t1) => aux t1 fv
   | (_ < ?t1) => aux t1 fv
   | (?t1 = _) => aux t1 fv
   | (?t1 + ?t2) =>
     let fv1  := aux t1 fv in
-    let fv2  := aux t2 fv1 in constr: fv2
+    let fv2  := aux t2 fv1 in constr:(fv2)
   | (?t1 * ?t2) =>
     let fv1  := aux t1 fv in
-    let fv2  := aux t2 fv1 in constr: fv2
+    let fv2  := aux t2 fv1 in constr:(fv2)
   | (?t1 - ?t2) =>
     let fv1  := aux t1 fv in
-    let fv2  := aux t2 fv1 in constr: fv2
+    let fv2  := aux t2 fv1 in constr:(fv2)
   | (-?t1) =>
     let fv1  := aux t1 fv in fv1
   | (?t1 ^ ?t2) =>
     let fv1  := aux t1 fv in
     match NCst t2 with
-    | false => let fv1 := rAddFv t fv in constr:fv1
+    | false => let fv1 := rAddFv t fv in constr:(fv1)
     | _ => fv1
     end
-  | _ => let fv1 := rAddFv t fv in constr:fv1
+  | _ => let fv1 := rAddFv t fv in constr:(fv1)
   end
   in aux t (@nil Z).
 
@@ -116,9 +116,9 @@ Ltac abstrait t fv :=
   | Zneg _ => constr:(Const t 1)
   | (?t1 = 0) -> ?g1 =>
     let v1  := aux t1 in
-    let v2  := aux g1 in constr: (lceq v1 v2)
+    let v2  := aux g1 in constr:(lceq v1 v2)
   | (?t1 = 0) =>
-    let v1  := aux t1 in constr: (lceq v1 lnil)
+    let v1  := aux t1 in constr:(lceq v1 lnil)
   | (?t1 + ?t2) =>
     let v1  := aux t1 in
     let v2  := aux t2 in constr:(Add v1 v2)
@@ -137,7 +137,7 @@ Ltac abstrait t fv :=
     end
   | (- ?t1) =>
     let v1  := aux t1 in constr:(Opp v1)
-  |  False  => constr:lnil
+  |  False  => constr:(lnil)
   | _ =>
     let p := rFind_at t fv in constr:(Var p)
   end

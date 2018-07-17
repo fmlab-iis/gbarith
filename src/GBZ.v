@@ -141,11 +141,9 @@ Proof.
   intro n; destruct n.
   - reflexivity.
   - unfold IZR; unfold IZR1.
-    rewrite IPR_INR.
-    reflexivity.
+    rewrite IPR_INR. rewrite (INR_IPR p). reflexivity.
   - unfold IZR; unfold IZR1.
-    rewrite IPR_INR.
-    reflexivity.
+    rewrite IPR_INR. rewrite (INR_IPR p). reflexivity.
 Qed.
 
 Ltac IZR_to_IZR1 :=

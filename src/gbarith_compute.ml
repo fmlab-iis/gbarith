@@ -20,23 +20,23 @@ let magma_path = "magma"
 let pp_constr fmt x = Pp.pp_with fmt (Printer.pr_constr x)
 
 let print_constr t =
-  if Term.isRel t then failwith "Rel"
-  else if Term.isVar t then failwith "Var"
-  else if Term.isInd t then failwith "Ind"
-  else if Term.isEvar t then failwith "Evar"
-  else if Term.isMeta t then failwith "Meta"
-  else if Term.isSort t then failwith "Sort"
-  else if Term.isCast t then failwith "Cast"
-  else if Term.isApp t then failwith "App"
-  else if Term.isLambda t then failwith "Lambda"
-  else if Term.isLetIn t then failwith "LetIn"
-  else if Term.isProd t then failwith "Prod"
-  else if Term.isConst t then failwith "Const"
-  else if Term.isConstruct t then failwith "Construct"
-  else if Term.isFix t then failwith "Fix"
-  else if Term.isCoFix t then failwith "CoFix"
-  else if Term.isCase t then failwith "Case"
-  else if Term.isProj t then failwith "Proj"
+  if Constr.isRel t then failwith "Rel"
+  else if Constr.isVar t then failwith "Var"
+  else if Constr.isInd t then failwith "Ind"
+  else if Constr.isEvar t then failwith "Evar"
+  else if Constr.isMeta t then failwith "Meta"
+  else if Constr.isSort t then failwith "Sort"
+  else if Constr.isCast t then failwith "Cast"
+  else if Constr.isApp t then failwith "App"
+  else if Constr.isLambda t then failwith "Lambda"
+  else if Constr.isLetIn t then failwith "LetIn"
+  else if Constr.isProd t then failwith "Prod"
+  else if Constr.isConst t then failwith "Const"
+  else if Constr.isConstruct t then failwith "Construct"
+  else if Constr.isFix t then failwith "Fix"
+  else if Constr.isCoFix t then failwith "CoFix"
+  else if Constr.isCase t then failwith "Case"
+  else if Constr.isProj t then failwith "Proj"
   else failwith ""
 
 (* ------------------------------------------------------------------------- *)
@@ -55,7 +55,7 @@ let fresh_id_in_env avoid id env =
   (* ids to be avoided *)
   let ids = (avoid@Termops.ids_of_named_context (Environ.named_context env)) in
   (* generate a new id *)
-  Namegen.next_ident_away_in_goal id ids
+  Namegen.next_ident_away_in_goal id (Names.Id.Set.of_list ids)
 
 let new_fresh_id avoid id gl =
   fresh_id_in_env avoid id (Proofview.Goal.env gl)
@@ -91,12 +91,12 @@ let string_of_version v =
 
 module CoqBinNums = struct
   let path = ["Coq"; "Numbers"; "BinNums"]
-  let _xI : Term.constr lazy_t = lazy (init_constant path "xI")
-  let _xO : Term.constr lazy_t = lazy (init_constant path "xO")
-  let _xH : Term.constr lazy_t = lazy (init_constant path "xH")
-  let _Z0 : Term.constr lazy_t = lazy (init_constant path "Z0")
-  let _Zpos : Term.constr lazy_t = lazy (init_constant path "Zpos")
-  let _Zneg : Term.constr lazy_t = lazy (init_constant path "Zneg")
+  let _xI : Constr.constr lazy_t = lazy (init_constant path "xI")
+  let _xO : Constr.constr lazy_t = lazy (init_constant path "xO")
+  let _xH : Constr.constr lazy_t = lazy (init_constant path "xH")
+  let _Z0 : Constr.constr lazy_t = lazy (init_constant path "Z0")
+  let _Zpos : Constr.constr lazy_t = lazy (init_constant path "Zpos")
+  let _Zneg : Constr.constr lazy_t = lazy (init_constant path "Zneg")
 end
 
 let num_0 = Int 0
@@ -116,7 +116,7 @@ let rec onum_of_cpos (n : Constr.t) : num =
   if Constr.equal n (Lazy.force CoqBinNums._xH) then num_1
   else
     try
-      let (constructor, args) = Term.destApp n in
+      let (constructor, args) = Constr.destApp n in
       if Constr.equal constructor (Lazy.force CoqBinNums._xI) then num_1 +/ (onum_of_cpos args.(0) */ num_2)
       else if Constr.equal constructor (Lazy.force CoqBinNums._xO) then num_0 +/ (onum_of_cpos args.(0) */ num_2)
       else failwith "Not a valid Coq positive."
@@ -133,7 +133,7 @@ let onum_of_cz (n : Constr.t) : num =
   if Constr.equal n (Lazy.force CoqBinNums._Z0) then num_0
   else
     try
-      let (constructor, args) = Term.destApp n in
+      let (constructor, args) = Constr.destApp n in
       if Constr.equal constructor (Lazy.force CoqBinNums._Zpos) then onum_of_cpos args.(0)
       else if Constr.equal constructor (Lazy.force CoqBinNums._Zneg) then minus_num (onum_of_cpos args.(0))
       else failwith "Not a valid Coq integer."
@@ -155,23 +155,23 @@ let ostring_of_cpos (n : Constr.t) : string =
 
 module CoqTerm = struct
   let path = ["GBArith"; "GBCompute"]
-  let _Zero : Term.constr lazy_t = lazy (init_constant path "Zero")
-  let _Const : Term.constr lazy_t = lazy (init_constant path "Const")
-  let _Var : Term.constr lazy_t = lazy (init_constant path "Var")
-  let _Opp : Term.constr lazy_t = lazy (init_constant path "Opp")
-  let _Add : Term.constr lazy_t = lazy (init_constant path "Add")
-  let _Sub : Term.constr lazy_t = lazy (init_constant path "Sub")
-  let _Mul : Term.constr lazy_t = lazy (init_constant path "Mul")
-  let _Pow : Term.constr lazy_t = lazy (init_constant path "Pow")
-  let _lnil : Term.constr lazy_t = lazy (init_constant path "lnil")
-  let _lceq : Term.constr lazy_t = lazy (init_constant path "lceq")
-  let _LT : Term.constr lazy_t = lazy (init_constant path "LT")
-  let _JCF1 : Term.constr lazy_t = lazy (init_constant path "JCF1")
-  let _JCF2 : Term.constr lazy_t = lazy (init_constant path "JCF2")
-  let _SingularR : Term.constr lazy_t = lazy (init_constant path "SingularR")
-  let _SingularZ : Term.constr lazy_t = lazy (init_constant path "SingularZ")
-  let _MagmaR : Term.constr lazy_t = lazy (init_constant path "MagmaR")
-  let _MagmaZ : Term.constr lazy_t = lazy (init_constant path "MagmaZ")
+  let _Zero : Constr.constr lazy_t = lazy (init_constant path "Zero")
+  let _Const : Constr.constr lazy_t = lazy (init_constant path "Const")
+  let _Var : Constr.constr lazy_t = lazy (init_constant path "Var")
+  let _Opp : Constr.constr lazy_t = lazy (init_constant path "Opp")
+  let _Add : Constr.constr lazy_t = lazy (init_constant path "Add")
+  let _Sub : Constr.constr lazy_t = lazy (init_constant path "Sub")
+  let _Mul : Constr.constr lazy_t = lazy (init_constant path "Mul")
+  let _Pow : Constr.constr lazy_t = lazy (init_constant path "Pow")
+  let _lnil : Constr.constr lazy_t = lazy (init_constant path "lnil")
+  let _lceq : Constr.constr lazy_t = lazy (init_constant path "lceq")
+  let _LT : Constr.constr lazy_t = lazy (init_constant path "LT")
+  let _JCF1 : Constr.constr lazy_t = lazy (init_constant path "JCF1")
+  let _JCF2 : Constr.constr lazy_t = lazy (init_constant path "JCF2")
+  let _SingularR : Constr.constr lazy_t = lazy (init_constant path "SingularR")
+  let _SingularZ : Constr.constr lazy_t = lazy (init_constant path "SingularZ")
+  let _MagmaR : Constr.constr lazy_t = lazy (init_constant path "MagmaR")
+  let _MagmaZ : Constr.constr lazy_t = lazy (init_constant path "MagmaZ")
 end
 
 type vname = string
@@ -226,7 +226,7 @@ let rec oterm_of_cterm (t : Constr.t) : term =
   if Term.isConst t then
     match Global.body_of_constant (Univ.out_punivs (Term.destConst t)) with
       None -> failwith "Failed to find the definition of constant."
-    | Some t' -> oterm_of_cterm t'
+    | Some (t', _) -> oterm_of_cterm t'
   else if Constr.equal t (Lazy.force CoqTerm._Zero) then Zero
   else
     try
@@ -252,7 +252,7 @@ let rec olineq_of_clineq (t : Constr.t) : lineq =
   if Term.isConst t then
     match Global.body_of_constant (Univ.out_punivs (Term.destConst t)) with
       None -> failwith "Failed to find the definition of constant."
-    | Some t' -> olineq_of_clineq t'
+    | Some (t', _) -> olineq_of_clineq t'
   else if Constr.equal t (Lazy.force CoqTerm._lnil) then []
   else
     try
@@ -956,7 +956,7 @@ let convert_coq_version (v : Globnames.global_reference) : version =
      begin
      match Global.body_of_constant cr with
      | None -> failwith "Unknown algorithm."
-     | Some c ->
+     | Some (c, _) ->
         if Constr.equal c (Lazy.force CoqTerm._LT) then LT
         else if Constr.equal c (Lazy.force CoqTerm._JCF1) then JCF1
         else if Constr.equal c (Lazy.force CoqTerm._JCF2) then JCF2
