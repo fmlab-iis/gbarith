@@ -4,6 +4,7 @@ open Unix
 open Utile
 open Entiers
 open Polynomes2
+open Constr
 
 exception ToolNotFound of string
 exception NotSupportedByMacOS
@@ -223,14 +224,14 @@ let rec cterm_of_oterm (t : term) : Constr.t =
 
 (** Constructs an OCaml term from a Coq term. *)
 let rec oterm_of_cterm (t : Constr.t) : term =
-  if Term.isConst t then
-    match Global.body_of_constant (Univ.out_punivs (Term.destConst t)) with
+  if Constr.is_Prop t then
+    match Global.body_of_constant (Univ.out_punivs (Constr.destConst t)) with
       None -> failwith "Failed to find the definition of constant."
     | Some (t', _) -> oterm_of_cterm t'
   else if Constr.equal t (Lazy.force CoqTerm._Zero) then Zero
   else
     try
-      let (constructor, args) = Term.destApp t in
+      let (constructor, args) = Constr.destApp t in
       if Constr.equal constructor (Lazy.force CoqTerm._Const) then Const ((onum_of_cz args.(0)) // (onum_of_cpos args.(1)))
       else if Constr.equal constructor (Lazy.force CoqTerm._Var) then Var (ostring_of_cpos args.(0))
       else if Constr.equal constructor (Lazy.force CoqTerm._Opp) then Opp (oterm_of_cterm args.(0))
@@ -249,14 +250,14 @@ let rec clineq_of_olineq (t : lineq) : Constr.t =
 
 (** Constructs an OCaml term list from a Coq term list. *)
 let rec olineq_of_clineq (t : Constr.t) : lineq =
-  if Term.isConst t then
-    match Global.body_of_constant (Univ.out_punivs (Term.destConst t)) with
+  if Constr.isConst t then
+    match Global.body_of_constant (Univ.out_punivs (Constr.destConst t)) with
       None -> failwith "Failed to find the definition of constant."
     | Some (t', _) -> olineq_of_clineq t'
   else if Constr.equal t (Lazy.force CoqTerm._lnil) then []
   else
     try
-      let (constructor, args) = Term.destApp t in
+      let (constructor, args) = Constr.destApp t in
       if Constr.equal constructor (Lazy.force CoqTerm._lceq) then (oterm_of_cterm args.(0) :: olineq_of_clineq args.(1))
       else failwith "Not a valid term list (2)."
     with destKO -> failwith "Not a valid term list (1)."
@@ -477,8 +478,8 @@ let lire_coefouvarexp s =
     |_ -> failwith "lire_coefouvarexp" )
   in
   let (c,v,e) =
-    try (Str.search_forward (Str.regexp "\\-*[0-9]+") v 0;
-	 (Big_int.big_int_of_string v, "", 1))
+    try let _ = Str.search_forward (Str.regexp "\\-*[0-9]+") v 0 in
+	(Big_int.big_int_of_string v, "", 1)
     with _ ->
       if String.sub v 0 1 = "-"
       then (Big_int.big_int_of_int (-1),String.sub v 1 ((String.length v)-1),e)
@@ -514,9 +515,9 @@ let lire_fgb s =
     (let vars = !Dansideal.name_var in
     let d = List.length vars in
     let s = replace "[\n\t\r]" "" s in
-    Str.search_forward (Str.regexp "#C Dimension.*#C Time") s 0;
+    let _ = Str.search_forward (Str.regexp "#C Dimension.*#C Time") s 0 in
     let s1 = Str.matched_string s in
-    Str.search_forward (Str.regexp "\\[.+\\]") s1 0;
+    let _ = Str.search_forward (Str.regexp "\\[.+\\]") s1 0 in
     let s2 = Str.matched_string s1 in
     let s2 = String.sub s2 1 ((String.length s2)-2) in
     let lpol = split_regexp "," s2 in
@@ -528,10 +529,10 @@ let lire_fgb s =
     trace "lire_fgb commence";
     let s = replace "[\n\t\r]" "" s in
     trace "return vires";
-    Str.search_forward (Str.regexp "GROBNER BASIS:.*") s 0;
+    let _ = Str.search_forward (Str.regexp "GROBNER BASIS:.*") s 0 in
     let s1 = Str.matched_string s in
     trace "GROBNER BASIS trouve";
-    Str.search_forward (Str.regexp "\\[.+\\]") s1 0;
+    let _ = Str.search_forward (Str.regexp "\\[.+\\]") s1 0 in
     let s2 = Str.matched_string s1 in
     let s2 = String.sub s2 1 ((String.length s2)-2) in
     let s2 = replace " " "" s2 in
@@ -871,7 +872,7 @@ let deg_nullstellensatz lpol p =
     List.iter
 	  (fun qi ->
        let deg' = (snd qi).(2) in
-       (if (compare deg' !degz) = 1 then
+       (if (Pervasives.compare deg' !degz) = 1 then
 	      degz := deg'))
 	  qqi;
     lq := [qqi]@(!lq);

@@ -602,6 +602,7 @@ Ltac gb_exists1 program :=
            * - p0 = b * (c1 / c)
            *)
           intros;
+          time "GBZArith: validate witness (c1 / c)" (
           match c with
           | 1%Z => exists c1
           | _ => (* exists (c1 / c) *) fail 100 "The constant c = "c" is not 1."
@@ -611,7 +612,8 @@ Ltac gb_exists1 program :=
           repeat equalities_to_goal2;
           simplZ; (* simplify all such that rewrite will work *)
           repeat rewrite_with_goal_in_goal;
-          ring || idtac "Tactic fails when d = 1."
+          idtac "GBZArith: goal before ring"; print_goal;
+          time "GBZArith: ring" ring || idtac "Tactic fails when d = 1.")
         end
       | lceq (Pow ?p0 ?d) (lceq ?c ?lc) =>
         fail 100 "d = "d" but only 1 is supported."
@@ -630,11 +632,12 @@ Ltac gb_exists1 program :=
           idtac "c1 := "; print_exp c1;
           idtac "e := "; print_exp e;
           let c1 := eval compute in c1 in
+          time "GBZArith: validate witness (c1)" (
           match c1 with
-          | 0%Z => exists c1; rewrite Z.mul_0_r; ring
-          | 1%Z => exists c1; rewrite Z.mul_1_r; reflexivity
+          | 0%Z => exists c1; rewrite Z.mul_0_r; idtac "GBZArith: goal before ring"; print_goal; time "GBArith: ring" ring
+          | 1%Z => exists c1; rewrite Z.mul_1_r; idtac "GBZArith: goal before reflexivity"; print_goal;  time "GBZArith: reflexivity" reflexivity
           | _ => fail 100 "Fail with constant c1 ="c1"."
-          end
+          end)
         end
       end (* end of match t *)
     )
@@ -679,6 +682,7 @@ Ltac gb_exists2 program :=
           idtac "c1 := "; print_exp c1;
           idtac "c2 := "; print_exp c2;
           idtac "e := "; print_exp e;
+          time "GBZArith: validate witness (c1 / c, c2 / c)" (
           match c with
           | 1%Z =>
             intros; exists c1; simplZ;
@@ -689,7 +693,8 @@ Ltac gb_exists2 program :=
           repeat equalities_to_goal2;
           simplZ;
           repeat rewrite_with_goal_in_goal;
-          ring || idtac "Tactic fails when d = 1."
+          idtac "GBZArith: goal before ring"; print_goal;
+          time "GBZArith: ring" ring || idtac "Tactic fails when d = 1.")
         end
       | lceq (Pow ?p0 ?d) (lceq ?c ?lc) =>
         fail 100 "d = "d" but only 1 is supported."
@@ -709,6 +714,7 @@ Ltac gb_exists2 program :=
           idtac "c1 = "; print_exp c1;
           idtac "c2 = "; print_exp c2;
           idtac "e = "; print_exp e;
+          time "GBZArith: validate witness (c1 / c, c2 / c)" (
           match c with
           | 1%Z => intros; exists c1; simplZ; intros; exists c2; simplZ
           | _ => (* exists (c1 / c) *) fail 100 "The constant c = "c" is not 1."
@@ -717,7 +723,7 @@ Ltac gb_exists2 program :=
           cut (c = e); simplZ; [idtac | ring];
           repeat equalities_to_goal2;
           repeat rewrite_with_goal_in_goal;
-          intro Hgb; ring_simplify in Hgb; ring_simplify; auto
+          intro Hgb; ring_simplify in Hgb; ring_simplify; auto)
         end
       end (* end of match t *)
     )
